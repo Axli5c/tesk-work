@@ -6,14 +6,22 @@ const pages = ref([])
 
 const generationTextFilter = computed(() => {
 
-  return pages.value
+  return pages.value.map(x=> x.filter(y=> {
+      if(y?.string.toLowerCase().startsWith(search.value)){
+        page.value = y.page
+        return y
+      }
+    }
+  ))
 })
+
+
 const progressBar = computed(()=>{
   return  Math.floor((lastGenerationString.value / length.value) * 100);
 })
 
 const allPages = computed(()=> {
-  return pages.value.length
+  return generationTextFilter.value.length
 })
 const pause = computed({
     get: () => stop.value,
@@ -76,14 +84,13 @@ async function generateRandomString() {
             }
             lastGenerationString.value = string
             result = generateString()
-            if(arrStrings.length >= 1000){
+            arrStrings.push({page: page, index: string + 1,string:result})
+            if(arrStrings.length >= 100){
                 await db.set(string, arrStrings)
                 pages.value.push(arrStrings)
                 page++
                 arrStrings = []
             }
-            arrStrings.push({page: page, index: string + 1,string:result})
-
             result = ''
             if(string == length.value) {
                 loading.value = false
@@ -165,7 +172,7 @@ getAll(true)
                     class="pa-6"
             >
                 <span class="mb-8">
-                  <v-card-title>{{item.page}}</v-card-title>{{item.index}} {{item.string}} {{item.string.length}}
+                  <v-card-title>{{item.page}}</v-card-title>{{item.index}} <span v-html="item.string"></span>
                 </span>
             </v-sheet>
         </div>

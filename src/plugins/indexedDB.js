@@ -1,16 +1,11 @@
 class IndexedDB {
-
-  // подключение к IndexedDB
   constructor(dbName, dbVersion, dbUpgrade) {
 
     return new Promise((resolve, reject) => {
-
       // объект соединения с базой данных
       this.db = null;
-
       // обработка ошибки если браузер не поддерживает indexedDb
       if (!('indexedDB' in window)) reject('not supported');
-
       // открывает базу данных
       const dbOpen = indexedDB.open(dbName, dbVersion);
 
@@ -24,6 +19,7 @@ class IndexedDB {
 
       dbOpen.onsuccess = () => {
         this.db = dbOpen.result;
+        console.log(this)
         resolve( this );
       };
 
@@ -35,9 +31,7 @@ class IndexedDB {
 
   }
   transaction(fn, type, params){
-
     return new Promise((resolve, reject) => {
-
       const
         transaction = this.db.transaction(params.storeName, type),
         store = transaction.objectStore(params.storeName),
@@ -75,22 +69,16 @@ class State {
   static DB = null;
   static target = new EventTarget();
   constructor(observed, updateCallback) {
-
     // колбэк изменения состояния
     this.updateCallback = updateCallback;
-
     // наблюдаемые свойства
     this.observed = new Set(observed);
-
     // подписка на события set
     State.target.addEventListener('set', e => {
-
       if (this.updateCallback && this.observed.has( e.detail.name )) {
         this.updateCallback(e.detail.name, e.detail.value);
       }
-
     });
-
   }
   async dbConnect() {
 
