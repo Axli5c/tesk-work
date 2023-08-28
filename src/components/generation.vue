@@ -1,6 +1,6 @@
 <script setup>
 import { State } from '@/plugins/indexedDB'
-import {computed, ref} from "vue";
+import {computed, onBeforeUnmount, onMounted, ref} from "vue";
 
 const pages = ref([])
 
@@ -9,7 +9,7 @@ const generationTextFilter = computed(() => {
   return pages.value
 })
 const progressBar = computed(()=>{
-  return  Math.floor((pages.value.length * 100 / length.value) * 100);
+  return  Math.floor((lastGenerationString.value / length.value) * 100);
 })
 
 const allPages = computed(()=> {
@@ -44,6 +44,7 @@ const isLoading = ref(JSON.parse(localStorage.getItem('loading'))),
       lastGenerationString = ref(0),
       stop = ref(JSON.parse(localStorage.getItem('pause'))),
       search = ref('')
+
 const reset = async () => {
     lastGenerationString.value = 0
     pause.value = false
@@ -52,86 +53,61 @@ const reset = async () => {
     setPage.value = 1
     await db.deleteAll()
 }
-
+function generateString() {
+  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = ''
+  for (let i = 0; i < 100; i++) {
+    result += characters.charAt(Math.floor(Math.random() * characters.length));
+  }
+  return result
+}
 async function generateRandomString() {
     let result = '';
     loading.value = true
-    const stringLength = 100
-    let arrPages = []
+    let arrStrings = []
     let page = 1
-    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     let string = lastGenerationString.value;
     do {
-          if(pause.value || !isLoading.value && !pause.value  && !pages.value.length) {
-              lastGenerationString.value = string
-              loading.value = false
-              break;
-          }
-          for (let i = 0; i < stringLength; i++) {
-            result += characters.charAt(Math.floor(Math.random() * characters.length));
-          }
-          await db.set(string, result)
-          if(arrPages.length >= 100){
-              pages.value.push(arrPages)
-              page++
-              arrPages = []
-          }
-          arrPages.push({page: page, index: string + 1,string:result})
+        try {
+            if(pause.value || (!isLoading.value && !pause.value && !pages.value.length)) {
+                loading.value = false
+                return
 
+            }
+            lastGenerationString.value = string
+            result = generateString()
+            if(arrStrings.length >= 1000){
+                await db.set(string, arrStrings)
+                pages.value.push(arrStrings)
+                page++
+                arrStrings = []
+            }
+            arrStrings.push({page: page, index: string + 1,string:result})
 
-          result = ''
-          if(string == length.value) {
-              loading.value = false
-              pause.value = false
-          }
-
+            result = ''
+            if(string == length.value) {
+                loading.value = false
+                pause.value = false
+            }
+        } catch(e) {
+            alert(e)
+        }
     } while(string++ < length.value)
-    // for (let string = lastGenerationString.value; string < length.value; string++) {
-    //     if(pause.value || !isLoading.value && !pause.value  && !pages.value.length) {
-    //         lastGenerationString.value = string
-    //         loading.value = false
-    //         break;
-    //     }
-    //     for (let i = 0; i < stringLength; i++) {
-    //       result += characters.charAt(Math.floor(Math.random() * characters.length));
-    //     }
-    //     await db.set(string, result)
-    //     if(arrPages.length >= 100){
-    //         pages.value.push(arrPages)
-    //         page++
-    //         arrPages = []
-    //     }
-    //     arrPages.push({page: page, index: string + 1,string:result})
-    //
-    //
-    //     result = ''
-    //     if(string == length.value) {
-    //         loading.value = false
-    //         pause.value = false
-    //     }
-    //   }
 }
 const getAll = async (firstLoad = false) => {
-    const data = await db.getAll()
-    let arrPages = []
-    let page = 1
-    if(firstLoad) {
-        for(let i = 0; i < data.length; i++) {
-            if(arrPages.length >= 100){
-                pages.value.push(arrPages)
-                page++
-                arrPages = []
-            }
-            arrPages.push({page:page, index: i + 1,string:data[i]})
-
+    try {
+        const data = await db.getAll()
+        pages.value = data
+        let lastPage = data[data.length - 1] || []
+        lastGenerationString.value = !lastPage.length ? 0 : lastPage[lastPage.length - 1].index
+        if(firstLoad && !pause.value && lastGenerationString.value){
+            generateRandomString()
         }
+    } catch (e) {
+        alert(e)
     }
-    lastGenerationString.value = !data.length ? data.length : data.length - 1
-    if(firstLoad && !pause.value && lastGenerationString.value){
-        generateRandomString()
-    }
-}
 
+}
 getAll(true)
 
 </script>
@@ -151,10 +127,14 @@ getAll(true)
         >
           {{ progressBar }}
         </v-progress-circular>
+        <v-divider></v-divider>
+        прошло время: {{ timer }}
+        <br>
+        Строк сгенерированно: <strong>{{ lastGenerationString }}</strong> из <strong>{{ length }}</strong> <br><br>
+        <span>Страниц: {{ pages.length }}</span>
       </v-card>
       <div class="d-flex flex-column gap-8">
-        {{lastGenerationString}} {{ pages.length}} {{pause}}
-        <v-btn v-if="!loading && !pause " @click="generateRandomString()" block variant="flat" color="success">Сгенерировать</v-btn>
+        <v-btn v-if="!loading && !pause" @click="generateRandomString()" block variant="flat" color="success">Сгенерировать</v-btn>
         <v-btn v-else-if="pause === false" @click="pause = true; getAll();" variant="flat" color="red">Пауза</v-btn>
         <v-btn v-else @click="pause = false; generateRandomString()" variant="flat" color="success">Продолжить</v-btn>
         <v-btn @click="reset" block variant="flat" color="primary">Сбросить</v-btn>
@@ -179,17 +159,16 @@ getAll(true)
         ></v-pagination>
         <div class="d-flex flex-column-reverse flex-wrap gap-8 pt-8">
             <v-sheet
-                v-for="item in generationTextFilter[page - 1]"
-                border="md" rounded="lg"
-                color="blue-lighten-5"
-                class="pa-6"
+                    v-for="item in generationTextFilter[page - 1]"
+                    border="md" rounded="lg"
+                    color="blue-lighten-5"
+                    class="pa-6"
             >
-        <span class="mb-8">
-          <v-card-title>{{item.page}}</v-card-title>{{item.index}} {{item.string}} {{item.string.length}}
-        </span>
+                <span class="mb-8">
+                  <v-card-title>{{item.page}}</v-card-title>{{item.index}} {{item.string}} {{item.string.length}}
+                </span>
             </v-sheet>
         </div>
-
     </v-col>
   </v-row>
 </template>
