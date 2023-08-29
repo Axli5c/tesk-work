@@ -60,6 +60,31 @@ class IndexedDB {
   deleteAll(storeName) {
     return this.transaction('clear', 'readwrite', {storeName})
   }
+  openCursor(storeName) {
+    return new Promise((resolve, reject) => {
+      const
+        transaction = this.db.transaction(storeName),
+        store = transaction.objectStore(storeName),
+        request = store.openCursor();
+        let value = null
+        let key = null
+      request.onsuccess = () => {
+        const cursor = request.result
+        if(cursor) {
+          value = cursor.value
+          key = cursor.key
+          cursor.continue()
+        } else {
+          resolve({value, key})
+        }
+      };
+      request.onerror = () => {
+        reject(request.error); // ошибка
+      };
+
+    });
+  }
+
 }
 
 class State {
@@ -127,6 +152,10 @@ class State {
   async getAll() {
     const db = await this.dbConnect();
     return await db.getAll(State.storeName)
+  }
+  async getLastRecord() {
+    const db = await this.dbConnect()
+    return await db.openCursor(State.storeName)
   }
   async deleteAll() {
     const db = await this.dbConnect()

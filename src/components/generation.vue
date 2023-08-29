@@ -1,28 +1,27 @@
 <script setup>
 import { State } from '@/plugins/indexedDB'
-import {computed, onBeforeUnmount, onMounted, ref} from "vue";
+import {computed, onBeforeUnmount, onDeactivated, onMounted, ref} from "vue";
+import {onBeforeRouteLeave, onBeforeRouteUpdate} from "vue-router";
 
-const pages = ref([])
+const pages = ref({})
 
 const generationTextFilter = computed(() => {
 
-  return pages.value.map(x=> x.filter(y=> {
-      if(y?.string.toLowerCase().startsWith(search.value)){
-        page.value = y.page
-        return y
-      }
-    }
-  ))
+  // return pages.value.map(x=> x.filter(y=> {
+  //     if(y?.string.toLowerCase().startsWith(search.value)){
+  //       page.value = y.page
+  //       return y
+  //     }
+  //   }
+  // ))
+  return pages.value
 })
 
 
 const progressBar = computed(()=>{
   return  Math.floor((lastGenerationString.value / length.value) * 100);
 })
-
-const allPages = computed(()=> {
-  return generationTextFilter.value.length
-})
+const allPages = ref(JSON.parse(localStorage.getItem('allPages')) || 0)
 const pause = computed({
     get: () => stop.value,
     set: (newVal) => {
@@ -41,7 +40,14 @@ const page = ref(JSON.parse(localStorage.getItem('page')))
 const setPage = computed({
     get: () => page.value,
     set: (newVal) => {
-        page.value = newVal
+      if(newVal != page.value) {
+        (async () => {
+          let nextPage = await db.get(newVal)
+          pages.value[newVal] = nextPage
+        })()
+      }
+      console.log(pages.value)
+      page.value = newVal
         localStorage.setItem('page', newVal)
     }
 })
@@ -49,7 +55,7 @@ const setPage = computed({
 const isLoading = ref(JSON.parse(localStorage.getItem('loading'))),
       db = new State(),
       length = ref(10000000),
-      lastGenerationString = ref(0),
+      lastGenerationString = ref(JSON.parse(localStorage.getItem('lastGenerationString'))),
       stop = ref(JSON.parse(localStorage.getItem('pause'))),
       search = ref('')
 
@@ -57,7 +63,12 @@ const reset = async () => {
     lastGenerationString.value = 0
     pause.value = false
     loading.value = false
-    pages.value = []
+    pages.value = {}
+    localStorage.setItem('allPages', 0)
+    allPages.value = 0
+    localStorage.setItem('lastGenerationString', 0)
+    lastGenerationString.value = 10000000
+    lastGenerationString.value = 0
     setPage.value = 1
     await db.deleteAll()
 }
@@ -73,50 +84,59 @@ async function generateRandomString() {
     let result = '';
     loading.value = true
     let arrStrings = []
-    let page = 1
-    let string = lastGenerationString.value;
-    do {
-        try {
-            if(pause.value || (!isLoading.value && !pause.value && !pages.value.length)) {
-                loading.value = false
-                return
-
-            }
-            lastGenerationString.value = string
-            result = generateString()
-            arrStrings.push({page: page, index: string + 1,string:result})
-            if(arrStrings.length >= 100){
-                await db.set(string, arrStrings)
-                pages.value.push(arrStrings)
-                page++
-                arrStrings = []
-            }
-            result = ''
-            if(string == length.value) {
-                loading.value = false
-                pause.value = false
-            }
-        } catch(e) {
-            alert(e)
-        }
-    } while(string++ < length.value)
+    localStorage.setItem('allPages', allPages.value)
+    localStorage.setItem('lastGenerationString', lastGenerationString.value)
+    for(lastGenerationString.value; lastGenerationString.value < length.value;) {
+      try {
+          lastGenerationString.value++
+          if(lastGenerationString.value === length.value) {
+              loading.value = false
+              pause.value = false
+              localStorage.setItem('allPages', allPages.value)
+              localStorage.setItem('lastGenerationString', lastGenerationString.value)
+          }
+          result = generateString()
+          arrStrings.push({index: lastGenerationString.value, string:result})
+          if(arrStrings.length === 100) {
+              allPages.value++
+              await db.set(allPages.value, arrStrings)
+              arrStrings = []
+              if(!isLoading.value || pause.value) {
+                  loading.value = false
+                  return false
+              }
+          }
+          if(lastGenerationString.value === 100) {
+              pages.value[setPage.value] = await db.get(1)
+          }
+          result = ''
+      } catch(e) {
+        throw(e)
+      }
+    }
 }
 const getAll = async (firstLoad = false) => {
     try {
-        const data = await db.getAll()
-        pages.value = data
-        let lastPage = data[data.length - 1] || []
-        lastGenerationString.value = !lastPage.length ? 0 : lastPage[lastPage.length - 1].index
+        let lastOpenPage = await db.get(setPage.value)
+        if(lastOpenPage) {
+          pages.value[setPage.value] = lastOpenPage
+        }
         if(firstLoad && !pause.value && lastGenerationString.value){
             generateRandomString()
         }
     } catch (e) {
-        alert(e)
+        throw(e)
     }
 
 }
 getAll(true)
 
+onMounted(()=> {
+    window.addEventListener("beforeunload", function() {
+        localStorage.setItem('lastGenerationString', lastGenerationString.value)
+        localStorage.setItem('allPages', allPages.value)
+    });
+})
 </script>
 
 <template>
@@ -132,13 +152,13 @@ getAll(true)
           :model-value="progressBar"
           color="primary"
         >
-          {{ progressBar }}
+          {{ progressBar }}%
         </v-progress-circular>
         <v-divider></v-divider>
-        прошло время: {{ timer }}
+
         <br>
         Строк сгенерированно: <strong>{{ lastGenerationString }}</strong> из <strong>{{ length }}</strong> <br><br>
-        <span>Страниц: {{ pages.length }}</span>
+        <span>Страниц: {{ allPages }}</span>
       </v-card>
       <div class="d-flex flex-column gap-8">
         <v-btn v-if="!loading && !pause" @click="generateRandomString()" block variant="flat" color="success">Сгенерировать</v-btn>
@@ -149,7 +169,7 @@ getAll(true)
     </v-col>
 
     <v-divider vertical></v-divider>
-    <v-col>
+    <v-col cols="10">
         <v-text-field
             density="compact"
             v-model="search"
@@ -166,7 +186,7 @@ getAll(true)
         ></v-pagination>
         <div class="d-flex flex-column-reverse flex-wrap gap-8 pt-8">
             <v-sheet
-                    v-for="item in generationTextFilter[page - 1]"
+                    v-for="item in generationTextFilter[page]"
                     border="md" rounded="lg"
                     color="blue-lighten-5"
                     class="pa-6"
