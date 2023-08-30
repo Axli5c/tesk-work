@@ -1,19 +1,12 @@
 <script setup>
 import { State } from '@/plugins/indexedDB'
-import {computed, onBeforeUnmount, onDeactivated, onMounted, ref} from "vue";
-import {onBeforeRouteLeave, onBeforeRouteUpdate} from "vue-router";
+import {computed, onMounted, ref} from "vue";
+
 
 const pages = ref({})
 
 const generationTextFilter = computed(() => {
 
-  // return pages.value.map(x=> x.filter(y=> {
-  //     if(y?.string.toLowerCase().startsWith(search.value)){
-  //       page.value = y.page
-  //       return y
-  //     }
-  //   }
-  // ))
   return pages.value
 })
 
@@ -140,7 +133,7 @@ onMounted(()=> {
 </script>
 
 <template>
-  <v-row >
+  <v-row>
     <v-col cols="2">
       <v-card rounded class="text-center py-10 mb-10">
         <v-card-title class="mb-10">Прогресс генерации</v-card-title>

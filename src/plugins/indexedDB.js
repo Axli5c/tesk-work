@@ -10,7 +10,6 @@ class IndexedDB {
       const dbOpen = indexedDB.open(dbName, dbVersion);
 
       if (dbUpgrade) {
-
         // слушаем событие upgrade
         dbOpen.onupgradeneeded = e => {
           dbUpgrade(dbOpen.result, e.oldVersion, e.newVersion);
