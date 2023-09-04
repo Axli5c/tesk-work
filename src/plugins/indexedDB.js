@@ -59,7 +59,7 @@ class IndexedDB {
   deleteAll(storeName) {
     return this.transaction('clear', 'readwrite', {storeName})
   }
-  openCursor(storeName) {
+  openCursor(storeName, searchValue) {
     return new Promise((resolve, reject) => {
       const
         transaction = this.db.transaction(storeName),
@@ -67,14 +67,20 @@ class IndexedDB {
         request = store.openCursor();
         let value = null
         let key = null
+        let findResult = []
       request.onsuccess = () => {
         const cursor = request.result
         if(cursor) {
           value = cursor.value
           key = cursor.key
+          cursor.value.forEach(x=> {
+            if(x.string.indexOf(searchValue) !== -1) {
+              findResult.push(x)
+            }
+          })
           cursor.continue()
         } else {
-          resolve({value, key})
+          resolve(findResult)
         }
       };
       request.onerror = () => {
@@ -152,9 +158,9 @@ class State {
     const db = await this.dbConnect();
     return await db.getAll(State.storeName)
   }
-  async getLastRecord() {
+  async getRecordByName(value) {
     const db = await this.dbConnect()
-    return await db.openCursor(State.storeName)
+    return await db.openCursor(State.storeName, value)
   }
   async deleteAll() {
     const db = await this.dbConnect()

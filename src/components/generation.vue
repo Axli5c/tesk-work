@@ -6,7 +6,11 @@ import {computed, onMounted, ref} from "vue";
 const pages = ref({})
 
 const generationTextFilter = computed(() => {
-
+    if(search.value){
+        (async() => {
+            pages.value[setPage.value] = await db.getRecordByName(search.value)
+        })()
+    }
   return pages.value
 })
 
@@ -177,7 +181,21 @@ onMounted(()=> {
           v-model="setPage"
           :length="allPages"
         ></v-pagination>
-        <div class="d-flex flex-column-reverse flex-wrap gap-8 pt-8">
+        <div v-show="search" class="d-flex flex-column flex-wrap gap-8 pt-8">
+            найдено результатов:
+            <v-sheet
+                    v-for="item in findedResult"
+                    border="md" rounded="lg"
+                    color="blue-lighten-5"
+                    class="pa-6"
+            >
+                       <span class="mb-8">
+                         <v-card-title>{{ item.page }}</v-card-title>{{ item.index }} <span
+                               v-html="item.string"></span>
+                       </span>
+            </v-sheet>
+        </div>
+        <div v-show="!search" class="d-flex flex-column-reverse flex-wrap gap-8 pt-8">
             <v-sheet
                     v-for="item in generationTextFilter[page]"
                     border="md" rounded="lg"
@@ -185,7 +203,8 @@ onMounted(()=> {
                     class="pa-6"
             >
                 <span class="mb-8">
-                  <v-card-title>{{item.page}}</v-card-title>{{item.index}} <span v-html="item.string"></span>
+                  <v-card-title>{{ item.page }}</v-card-title>{{ item.index }} <span
+                        v-html="item.string"></span>
                 </span>
             </v-sheet>
         </div>
