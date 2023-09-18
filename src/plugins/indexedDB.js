@@ -35,7 +35,6 @@ class IndexedDB {
         transaction = this.db.transaction(params.storeName, type),
         store = transaction.objectStore(params.storeName),
         request = params.value != null ? store[fn](params.value, params.name) : params.name != null ? store[fn](params.name) : store[fn]();
-
       request.onsuccess = () => {
         resolve(request.result); // успех
       };
@@ -67,20 +66,34 @@ class IndexedDB {
         request = store.openCursor();
         let value = null
         let key = null
-        let findResult = []
+        let findResult = {}
+        let resultValue = []
+        let page = 1
+        let isSetPage = false
       request.onsuccess = () => {
         const cursor = request.result
         if(cursor) {
           value = cursor.value
           key = cursor.key
-          cursor.value.forEach(x=> {
-            if(x.string.indexOf(searchValue) !== -1) {
-              findResult.push(x)
-            }
-          })
+          if(!searchValue) return
+          for(let x in cursor.value) {
+              if(cursor.value[x].string.indexOf(searchValue) !== -1) {
+                  resultValue.push(cursor.value[x])
+                  if (resultValue.length > 0 && !isSetPage) {
+                      findResult[page] = [...resultValue]
+                  }
+                  if(resultValue.length === 100){
+                      isSetPage = true
+                      page++
+                      findResult[page] = resultValue
+                      resultValue = []
+                  }
+              }
+          }
           cursor.continue()
         } else {
           resolve(findResult)
+          findResult = []
         }
       };
       request.onerror = () => {
@@ -91,7 +104,6 @@ class IndexedDB {
   }
 
 }
-
 class State {
   static dbName = 'stateDB';
   static dbVersion = 1;
@@ -116,7 +128,6 @@ class State {
       State.dbName,
       State.dbVersion,
       (db, oldVersion, newVersion) => {
-
         // upgrade database
         switch (oldVersion) {
           case 0: {
@@ -129,42 +140,28 @@ class State {
     return State.DB;
 
   }
-
   async set(name, value) {
-
     // добавляем наблюдаемое свойство
     this.observed.add(name);
-
     // обновляем базу
-    const db = await this.dbConnect();
-    await db.set(State.storeName, name, value);
-
+    await State.DB.set(State.storeName, name, value);
     // отправляем соытие
     const event = new CustomEvent('set', { detail: { name, value } });
     State.target.dispatchEvent(event);
 
   }
   async get(name) {
-
-    // добавляем наблюдаемое свойство
-    this.observed.add(name);
-
-    // получаем значение
-    const db = await this.dbConnect();
-    return await db.get( State.storeName, name );
+    return await State.DB.get(State.storeName, name);
 
   }
   async getAll() {
-    const db = await this.dbConnect();
-    return await db.getAll(State.storeName)
+    return await State.DB.getAll(State.storeName)
   }
   async getRecordByName(value) {
-    const db = await this.dbConnect()
-    return await db.openCursor(State.storeName, value)
+    return await State.DB.openCursor(State.storeName, value)
   }
   async deleteAll() {
-    const db = await this.dbConnect()
-    return await db.deleteAll(State.storeName)
+    return await State.DB.deleteAll(State.storeName)
   }
 
 }
